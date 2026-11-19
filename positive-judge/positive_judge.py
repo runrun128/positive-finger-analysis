@@ -132,6 +132,13 @@ def build_lexicon(extra=None):
 # ---------------------------------------------------------------- 外部辞書(Web / ファイル)
 CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "positive_judge")
 
+# 辞書を指定しないときに自動で取得する辞書(日本語評価極性辞書: 東北大学 乾・岡崎研究室)
+# ※ 利用条件(出典の明記など)は配布元で確認すること
+DEFAULT_DICT_URLS = [
+    "https://www.cl.ecei.tohoku.ac.jp/resources/sent_lex/wago.121808.pn",
+    "https://www.cl.ecei.tohoku.ac.jp/resources/sent_lex/pn.csv.m3.120408.trim",
+]
+
 
 def _sign(raw, min_score):
     """極性の表記(数値 / p / n / ポジ / ネガ)を +1 / -1 / 0 にそろえる"""
@@ -238,7 +245,7 @@ def fetch_dict(url, refresh=False):
             with urllib.request.urlopen(req, timeout=60) as resp:
                 data = resp.read()
         except Exception as exc:
-            sys.exit(f"辞書を取得できませんでした: {url}\n  理由: {exc}")
+            raise RuntimeError(f"辞書を取得できませんでした: {url}\n  理由: {exc}") from exc
         with open(cached, "wb") as fh:
             fh.write(data)
     return cached
@@ -464,6 +471,8 @@ def main():
     ap.add_argument("--dict-url", action="append", default=[],
                     help="Webの感情辞書のURL(複数指定可。~/.cache/positive_judge/ に保存)")
     ap.add_argument("--refresh", action="store_true", help="キャッシュを使わず辞書を再取得")
+    ap.add_argument("--no-default-dict", action="store_true",
+                    help="既定の辞書(日本語評価極性辞書)を自動取得せず、内蔵辞書だけを使う")
     ap.add_argument("--contrast-weight", type=int, default=2,
                     help="逆接(けど・のに・が)の後ろの感情語の重み(既定 2、1で無効)")
     ap.add_argument("--ignore", action="append", default=[],
@@ -475,27 +484,38 @@ def main():
     ap.add_argument("-v", "--verbose", action="store_true", help="形態素の一覧も表示")
     args = ap.parse_args()
 
-    extra = {}
-    for url in args.dict_url:
-        extra.update(load_dict_file(fetch_dict(url, args.refresh), args.min_score))
-    for path in args.dict:
-        extra.update(load_dict_file(path, args.min_score))
-    if args.dict or args.dict_url:
-        print(f"外部辞書: {len(extra)} 語を読み込みました")
-    polarity, surf = build_lexicon(extra)
-    for word in args.ignore:
-        polarity.pop(word, None)
-    name, tokenize = make_backend(args.backend, surf)
-
     texts = list(args.texts)
     if args.file:
-        with open(args.file, encoding="utf-8") as fh:
+        with open(args.file, encoding="utf-8-sig") as fh:  # BOM付きUTF-8も読める
             texts += [l.strip() for l in fh if l.strip()]
     if not texts and not sys.stdin.isatty():
         texts = [l.strip() for l in sys.stdin if l.strip()]
     if not texts:
         ap.print_help()
         return
+
+    # 辞書: 指定が無ければ既定の辞書を自動取得(初回のみ通信。以後は保存したものを使う)
+    extra = {}
+    use_default = not (args.dict or args.dict_url or args.no_default_dict)
+    urls = list(DEFAULT_DICT_URLS) if use_default else list(args.dict_url)
+    for url in urls:
+        try:
+            extra.update(load_dict_file(fetch_dict(url, args.refresh), args.min_score))
+        except RuntimeError as exc:
+            if use_default:
+                print(f"※ 既定の辞書を取得できなかったため、内蔵辞書だけで判定します。\n  {exc}",
+                      file=sys.stderr)
+                extra = {}
+                break
+            sys.exit(str(exc))
+    for path in args.dict:
+        extra.update(load_dict_file(path, args.min_score))
+    if extra:
+        print(f"外部辞書: {len(extra)} 語を読み込みました")
+    polarity, surf = build_lexicon(extra)
+    for word in args.ignore:
+        polarity.pop(word, None)
+    name, tokenize = make_backend(args.backend, surf)
 
     print(f"バックエンド: {name}")
     if name.startswith("builtin"):

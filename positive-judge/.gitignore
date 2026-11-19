@@ -7,3 +7,6 @@ venv/
 wago.121808.pn
 pn.csv.m3.120408.trim
 .cache/
+build/
+dist/
+*.egg-info/

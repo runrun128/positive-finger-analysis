@@ -10,41 +10,64 @@
 4. 逆接(「けど」「のに」「が」)の後ろの語は2倍の重みで数える
 5. 合計スコアで ポジティブ / ネガティブ / 混在 / 判定不能 を出す
 
-## インストール
+## インストール(1行)
 
 ```
-pip install -r requirements.txt
+pip install git+https://github.com/<ユーザー名>/positive-judge
 ```
 
-Python 3.15 などの新しい版では、fugashi(MeCab)のビルド済みパッケージがなく入らないことがあります。その場合は janome だけで動きます。
+これだけで、形態素解析器(janome)も一緒に入ります。別途インストールするものはありません。
+
+インストール後は、どちらでも実行できます。
+
+```
+positive-judge "今日はとても楽しかった!"
+python -m positive_judge "今日はとても楽しかった!"
+```
+
+(`positive-judge` が見つからない場合は、`python -m positive_judge` を使ってください。)
+
+ブラウザだけで試したい場合は、GitHub の「Code」→「Codespaces」から開くと、必要なものが入った状態で始められます。
+
+ソースを取得して使う場合は、次のとおりです。
+
+```
+git clone https://github.com/<ユーザー名>/positive-judge
+cd positive-judge
+pip install -e .
+```
+
+Python 3.15 などの新しい版では、fugashi(MeCab)のビルド済みパッケージがなく入らないことがあります。janome は純Pythonなので影響を受けません。
 fugashi / sudachipy が入っている環境では、自動でそちらを優先して使います。
 
 ## 使い方
 
 ```
-python positive_judge.py "今日はとても楽しかった!"
-python positive_judge.py -v "悲しくなかった"        # 形態素の一覧も表示
-python positive_judge.py -f sentences.txt            # 1行1文のテキスト(UTF-8)をまとめて判定
+positive-judge "今日はとても楽しかった!"
+positive-judge -v "悲しくなかった"        # 形態素の一覧も表示
+positive-judge -f sentences.txt            # 1行1文のテキスト(UTF-8)をまとめて判定
 ```
 
-### 日本語評価極性辞書を使う
+### 日本語評価極性辞書
 
-辞書本体はこのリポジトリに含めていません。実行時にURLから取得して `~/.cache/positive_judge/` に保存します(2回目以降は保存したものを使います)。
+辞書を指定しなければ、日本語評価極性辞書(東北大学 乾・岡崎研究室)を**初回に自動で取得**して使います。
+辞書本体はこのリポジトリに含めていません。`~/.cache/positive_judge/` に保存し、2回目以降は保存したものを使います。
+取得できないとき(オフラインなど)は、警告を出して内蔵の小さな辞書だけで判定します。
+
+別の辞書を使う場合や、自動取得を止める場合は、次のようにします。
 
 ```
-python positive_judge.py \
-  --dict-url https://www.cl.ecei.tohoku.ac.jp/resources/sent_lex/wago.121808.pn \
-  --dict-url https://www.cl.ecei.tohoku.ac.jp/resources/sent_lex/pn.csv.m3.120408.trim \
-  -f sentences.txt
+positive-judge --dict-url <辞書のURL> -f sentences.txt   # 指定した辞書だけを使う
+positive-judge --dict 自作辞書.tsv "..."                   # 手元のファイルを使う
+positive-judge --no-default-dict "..."                      # 内蔵の辞書だけを使う
 ```
-
-(Windows の PowerShell では、`\` ではなく1行で書いてください。)
 
 ### オプション
 
 | オプション | 内容 |
 |---|---|
-| `--dict-url URL` | Webの感情辞書を取得して使う(複数可) |
+| `--no-default-dict` | 既定の辞書の自動取得をしない(内蔵辞書だけを使う) |
+| `--dict-url URL` | Webの感情辞書を取得して使う(複数可。指定すると既定の辞書は使わない) |
 | `--dict FILE` | ローカルの辞書ファイルを使う(複数可。zip / tar.gz 可) |
 | `--ignore 語` | 判定から外す語(複数可。例: `--ignore サービス`) |
 | `--contrast-weight N` | 逆接の後ろの重み(既定 2、`1` で無効) |
